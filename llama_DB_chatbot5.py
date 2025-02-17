@@ -796,7 +796,7 @@ if __name__ == "__main__":
         
         # # Optional: Connect to database if needed
         # visualizer.connect_to_database("SQLite", db_file="BIRD.db")
-        openai_api_key = ""
+        openai_api_key = self.openai_api_key
         roles = "Python Developer"
         # visualizer.chatbot(role=roles, openai_api_key=openai_api_key)
         
