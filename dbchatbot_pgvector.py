@@ -3,7 +3,7 @@ from langchain.chains import LLMChain
 import plotly.graph_objs as go
 import plotly.express as px
 from llama_parse import LlamaParse
-from llama_index.core import SimpleDirectoryReader, StorageContext
+from llama_index.core import SimpleDirectoryReader, StorageContext,get_response_synthesizer
 from llama_index.embeddings.openai import OpenAIEmbedding
 from langchain.memory import ConversationBufferMemory
 from llama_index.core import VectorStoreIndex
@@ -26,8 +26,8 @@ import tempfile
 import pandas as pd
 import sqlite3
 from dotenv import load_dotenv
-from llama_index.llms.gemini import Gemini
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.core.retrievers import (VectorIndexRetriever)
+from llama_index.core.query_engine import RetrieverQueryEngine
 
 class DatabaseQueryVisualizer:
     def __init__(self):
@@ -313,18 +313,21 @@ class DatabaseQueryVisualizer:
                                     )
                 
                 if new_docs:
-                    doc=SimpleDirectoryReader(input_files=new_docs, 
-                            file_extractor=file_extractor).load_data()
+                    doc2=parser.load_data(file_path)
+                    # doc=SimpleDirectoryReader(input_files=new_docs, 
+                    #         file_extractor=file_extractor).load_data()
+                    for doc, path in zip(doc2, file_path):
+                            doc.metadata["file_name"] = os.path.basename(path)
                     storage_context = StorageContext.from_defaults(vector_store=vector_store)
                     # print("new pdfs added ")
 
                     # Create new index
-                    index = VectorStoreIndex(doc, storage_context=storage_context)
-                    self.query_engine = index.as_query_engine()
+                    index = VectorStoreIndex(doc2, storage_context=storage_context)
+                    # self.query_engine = index.as_query_engine()
                 else:
                     # print("all same pdfs")
                     index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
-                    self.query_engine = index.as_query_engine()
+                    # self.query_engine = index.as_query_engine()
                     # print(f"loaded from existing data_{table_name}")
                 self.processed = True
                 # a=input("press ok for deleting ")
@@ -332,10 +335,14 @@ class DatabaseQueryVisualizer:
                 #     self.delete_pdf("sample5.txt",self.conn_pgadmin,table_name)
             else:
                 # Load and parse documents
-                documents = SimpleDirectoryReader(
-                            input_files=file_path, 
-                            file_extractor=file_extractor
-                        ).load_data()
+                # documents = SimpleDirectoryReader(
+                #             input_files=file_path, 
+                #             file_extractor=file_extractor
+                #         ).load_data()
+                documents=parser.load_data(file_path)
+                # Assign filename to each document's metadata
+                for doc, path in zip(documents, file_path):
+                    doc.metadata["file_name"] = os.path.basename(path)
                 
                     
 
@@ -355,8 +362,14 @@ class DatabaseQueryVisualizer:
 
                 # Create new index
                 index = VectorStoreIndex(documents, storage_context=storage_context)
-                self.query_engine = index.as_query_engine()
+                # self.query_engine = index.as_query_engine()
                 self.processed = True
+            retriever = VectorIndexRetriever(index=index, similarity_top_k=10)
+            response_synthesizer = get_response_synthesizer()
+            self.query_engine = RetrieverQueryEngine(
+                                    retriever=retriever,
+                                    response_synthesizer=response_synthesizer,
+                                )
                 
 
         return self.query_engine
@@ -796,7 +809,8 @@ if __name__ == "__main__":
         
         # # Optional: Connect to database if needed
         # visualizer.connect_to_database("SQLite", db_file="BIRD.db")
-        openai_api_key = self.openai_api_key
+        load_dotenv()
+        openai_api_key = os.getenv("OPENAI_API_KEY")
         roles = "Python Developer"
         # visualizer.chatbot(role=roles, openai_api_key=openai_api_key)
         
